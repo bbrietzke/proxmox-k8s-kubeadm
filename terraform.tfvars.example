@@ -1,0 +1,180 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is where secrets end up, so keep it out of version control.
+
+proxmox_endpoint  = "https://pve.example.com:8006/"
+proxmox_api_token = "terraform@pve!tf-token=00000000-0000-0000-0000-000000000000"
+proxmox_node      = "pve1"   # only used as a fallback if control_plane_node/worker_node are unset
+datastore_id      = "ceph-pool"   # your Ceph pool's storage ID in Proxmox
+
+# Multi-node Proxmox cluster placement -- workers on one node, control
+# planes on another. Changing these later migrates the VMs in place
+# instead of destroying and recreating them (see README). Since these live
+# on a Ceph pool, migration is live and effectively instant either way.
+control_plane_node = "pve02"
+worker_node         = "pve01"
+
+# The template only exists on PVE00, separate from where the VMs land
+template_node = "pve00"
+
+# Proxmox's built-in self-signed cert will fail TLS verification -- set this
+# to true unless you've installed a real cert or trusted the Proxmox CA
+# locally (see README).
+proxmox_insecure = true
+
+template_vm_id = 999999994
+starting_vmid  = 9000
+
+control_plane_ha = false   # true = 3 control-plane nodes, false = 1
+worker_count      = 3
+
+cluster_name = "homelab"
+# kubeadm_api_version defaults to v1beta4; bump if your kubeadm version
+# requires a newer config schema (see README)
+
+ci_username = "k8sadmin"
+ci_password = "change-me"
+ssh_public_keys = [
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... you@example.com",
+]
+ssh_private_key_path = "~/.ssh/id_ed25519"
+
+# worker_data_disk_size defaults to 256 (GB) if you don't set it here
+# worker_data_disk_size = 256
+
+# The worker data disk is formatted (ext4) and mounted automatically at
+# /var/lib/longhorn -- Longhorn's own default data path -- so it's ready
+# to use as soon as you install Longhorn. Set prepare_worker_data_disk =
+# false to leave the raw disk alone instead.
+# prepare_worker_data_disk     = true
+# worker_data_disk_device       = "/dev/sdb"
+# worker_data_disk_filesystem   = "ext4"
+# worker_data_disk_mount_point  = "/var/lib/longhorn"
+
+# Longhorn, using the mounted data disk above as its default data path --
+# zero extra config needed there since the paths already match. Installs
+# open-iscsi/nfs-common on workers first (Longhorn requires iscsiadm to
+# run at all). Replica count defaults to min(worker_count, 3) if you don't
+# set it explicitly.
+# install_longhorn        = true
+# longhorn_version         = "1.11.2"
+# longhorn_namespace       = "longhorn-system"
+# longhorn_replica_count   = 3
+# longhorn_extra_values    = ""
+
+# kube-prometheus-stack (Prometheus, Alertmanager, Grafana). Uses Longhorn
+# for persistent storage automatically if install_longhorn = true, falls
+# back to ephemeral storage cleanly if not. Grafana's admin password is
+# auto-generated (see the variable's description for how to retrieve it)
+# unless you set grafana_admin_password explicitly.
+# install_prometheus        = true
+# prometheus_chart_version   = "87.19.2"
+# prometheus_namespace       = "monitoring"
+# prometheus_retention       = "15d"
+# prometheus_storage_size    = "50Gi"
+# alertmanager_storage_size  = "5Gi"
+# grafana_storage_size       = "5Gi"
+# grafana_admin_password     = ""
+# prometheus_extra_values    = ""
+
+# prometheus-adapter: replaces a standalone metrics-server with one backed
+# by the Prometheus above, so kubectl top / HPA work without an extra
+# component. Requires install_prometheus = true.
+# install_prometheus_adapter       = true
+# prometheus_adapter_chart_version  = "4.9.0"
+# prometheus_adapter_extra_values   = ""
+
+# pod_network_cidr and kubernetes_service_cidr default to the usual
+# 10.244.0.0/16 / 10.96.0.0/12 if you don't set them here
+# pod_network_cidr       = "10.244.0.0/16"
+# kubernetes_service_cidr = "10.96.0.0/12"
+
+# Calico is installed automatically once the cluster is up, using the same
+# pod_network_cidr above for its IP pool. Set install_calico = false to
+# leave the cluster with no CNI instead.
+# install_calico       = true
+# calico_version         = "v3.32.2"
+# calico_encapsulation  = "VXLAN"
+
+# MetalLB gives Services of type LoadBalancer a real external IP. Pick a
+# range of free addresses on the same L2 segment as your nodes -- not
+# overlapping DHCP, the kube-vip control-plane VIP (control_plane_vip
+# above), or anything else already in use.
+install_metallb      = true
+metallb_version       = "v0.15.3"
+metallb_address_pool = ["192.168.3.200-192.168.3.220"]
+
+# Traefik is installed via Helm once Calico and MetalLB are up.
+# LoadBalancer is the default service type now that MetalLB provides one --
+# set traefik_service_type = "NodePort" instead if you set install_metallb
+# = false above.
+# install_traefik        = true
+# helm_version            = "v3.21.3"
+# traefik_chart_version   = "41.5.0"
+# traefik_namespace       = "traefik"
+# traefik_service_type    = "LoadBalancer"
+
+# Gateway API on, classic Ingress off -- this project installs the Gateway
+# API CRDs automatically when the former is true.
+# traefik_enable_gateway_api = true
+# gateway_api_version         = "v1.6.1"
+# traefik_enable_ingress      = false
+
+# Anything else the chart supports, as raw YAML (merged in after the two
+# generated files above, so it can override them). Example: broaden the
+# default Gateway to accept routes from every namespace --
+# traefik_extra_values = <<-YAML
+#   gateway:
+#     listeners:
+#       web:
+#         namespacePolicy:
+#           from: All
+# YAML
+
+# cert-manager: controller/webhook/cainjector + CRDs only. No ClusterIssuer
+# is created here -- see README for why (it depends on your domain/DNS
+# setup, which this project can't guess).
+# install_cert_manager    = true
+# cert_manager_version     = "v1.21.0"
+# cert_manager_namespace   = "cert-manager"
+# cert_manager_extra_values = ""
+
+# letsencrypt-staging and letsencrypt-production ClusterIssuers, both using
+# Cloudflare DNS-01. cloudflare_api_token should be a SCOPED token
+# (Zone:DNS:Edit on the zone(s) you'll issue certs for), not the legacy
+# Global API Key.
+install_letsencrypt_cloudflare_issuers = true
+acme_email            = "you@example.com"
+cloudflare_api_token   = "your-cloudflare-scoped-api-token"
+# cloudflare_secret_name = "cloudflare-api-token-secret"
+
+# Only relevant when control_plane_ha = true -- point this at a real
+# load balancer/VIP in front of all control-plane nodes for genuine HA.
+# control_plane_endpoint_override = "k8s-api.example.lan"
+
+# Floating VIP for the control plane, managed by kube-vip. Set this and
+# kube-vip is deployed automatically as a static pod on every control-plane
+# node; leave it unset to skip kube-vip entirely.
+# control_plane_vip = "192.168.1.50"
+# kube_vip_interface = "eth0"   # must match the template's NIC name
+
+# Per-instance Proxmox placement, keyed by index (0 = first instance,
+# matching count.index). An entry with no placement_zone, or no entry at
+# all for that index, just uses control_plane_node/worker_node above.
+worker_nodes = {
+  0 = { placement_zone = "pve02" }
+  1 = {}
+  2 = {}
+}
+# control_plane_nodes = {
+#   0 = { placement_zone = "pve02" }
+#   1 = { placement_zone = "pve01" }
+#   2 = { placement_zone = "pve00" }
+# }
+
+# Every node gets an automatic topology.kubernetes.io/zone label matching
+# wherever it's actually placed above (label_zone_automatically = true by default).
+# Add anything else here; it's merged with (and can override) the
+# automatic zone label per node.
+# node_labels = {
+#   "homelab-worker-01" = { disktype = "ssd" }
+# }
